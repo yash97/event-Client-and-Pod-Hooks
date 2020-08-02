@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"sort"
 	"strings"
@@ -1612,7 +1613,21 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 			return err
 		}
 	}
+	//	fmt.Printf("Pod Start Hook\n")
+	fmt.Printf("before Pod Hook if\n")
+	if len(pod.Spec.PostStartHook) > 0 {
+		fmt.Printf("Pod Start Hook  ,%s\n", pod.Spec.PostStartHook)
 
+		s := "echo hello wolrd"
+		str := strings.Split(s, " ")
+		arg0 := str[0]
+		str = str[1:]
+		cmd, err := exec.Command(arg0, str...).Output()
+		if err != nil {
+			fmt.Printf("%s", err)
+		}
+		fmt.Printf("%s", cmd)
+	}
 	// Fetch the pull secrets for the pod
 	pullSecrets := kl.getPullSecretsForPod(pod)
 

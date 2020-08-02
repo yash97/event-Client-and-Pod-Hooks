@@ -769,6 +769,7 @@ function start_kubelet {
     # shellcheck disable=SC2206
     all_kubelet_flags=(
       "--v=${LOG_LEVEL}"
+      "--eventclient="localhost:10000,localhost:20000""
       "--vmodule=${LOG_SPEC}"
       "--chaos-chance=${CHAOS_CHANCE}"
       "--container-runtime=${CONTAINER_RUNTIME}"

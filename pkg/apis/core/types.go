@@ -2626,6 +2626,10 @@ type PodReadinessGate struct {
 
 // PodSpec is a description of a pod
 type PodSpec struct {
+	//Hook for pod
+	//+optional
+	PostStartHook string
+
 	Volumes []Volume
 	// List of initialization containers belonging to the pod.
 	InitContainers []Container

@@ -5991,6 +5991,7 @@ func Convert_core_PodSignature_To_v1_PodSignature(in *core.PodSignature, out *v1
 }
 
 func autoConvert_v1_PodSpec_To_core_PodSpec(in *v1.PodSpec, out *core.PodSpec, s conversion.Scope) error {
+	out.PostStartHook = in.PostStartHook
 	if in.Volumes != nil {
 		in, out := &in.Volumes, &out.Volumes
 		*out = make([]core.Volume, len(*in))
@@ -6047,6 +6048,7 @@ func autoConvert_v1_PodSpec_To_core_PodSpec(in *v1.PodSpec, out *core.PodSpec, s
 }
 
 func autoConvert_core_PodSpec_To_v1_PodSpec(in *core.PodSpec, out *v1.PodSpec, s conversion.Scope) error {
+	out.PostStartHook = in.PostStartHook
 	if in.Volumes != nil {
 		in, out := &in.Volumes, &out.Volumes
 		*out = make([]v1.Volume, len(*in))

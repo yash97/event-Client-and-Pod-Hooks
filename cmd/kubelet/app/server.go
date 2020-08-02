@@ -450,8 +450,67 @@ func initConfigz(kc *kubeletconfiginternal.KubeletConfiguration) error {
 	return nil
 }
 
+func makeRestClients(receiverIPs string, clientConfig *restclient.Config) []restclient.Config {
+	address := strings.Split(receiverIPs, ",")
+	x := clientConfig.ContentConfig
+	x.ContentType = "application/json"
+	restClients := []restclient.Config{}
+	for _, s := range address {
+		eventClientConfig := restclient.Config{
+			Host:                s,
+			APIPath:             "",
+			ContentConfig:       x,
+			Username:            "",
+			Password:            "",
+			BearerToken:         "",
+			BearerTokenFile:     "",
+			Impersonate:         clientConfig.Impersonate,
+			AuthProvider:        nil,
+			AuthConfigPersister: nil,
+			ExecProvider:        nil,
+			TLSClientConfig: restclient.TLSClientConfig{
+				Insecure:   false,
+				ServerName: "",
+				CertFile:   "",
+				KeyFile:    "",
+				CAFile:     "",
+				CertData:   nil,
+				KeyData:    nil,
+				CAData:     nil,
+				NextProtos: nil,
+			},
+			DisableCompression: false,
+			Transport:          nil,
+			WrapTransport:      nil,
+			QPS:                100,
+			Burst:              100,
+			RateLimiter:        nil,
+
+			Timeout: time.Duration(10000000),
+			Dial:    nil,
+			Proxy:   nil,
+		}
+		restClients = append(restClients, eventClientConfig)
+	}
+	return restClients
+}
+func makeEventsGetter(restClients []restclient.Config) []v1core.EventsGetter {
+	eventsGetters := []v1core.EventsGetter{}
+	for _, restClient := range restClients {
+		eventGetter, _ := v1core.NewForConfig(&restClient)
+		eventsGetters = append(eventsGetters, eventGetter)
+	}
+	return eventsGetters
+
+}
+func makeEventClients(receiverIPs string, clientConfig *restclient.Config) []v1core.EventsGetter {
+	restClients := makeRestClients(receiverIPs, clientConfig)
+	eventsGetter := makeEventsGetter(restClients)
+	return eventsGetter
+}
+
 // makeEventRecorder sets up kubeDeps.Recorder if it's nil. It's a no-op otherwise.
-func makeEventRecorder(kubeDeps *kubelet.Dependencies, nodeName types.NodeName) {
+func makeEventRecorder(kubeDeps *kubelet.Dependencies, nodeName types.NodeName, eventClients []v1core.EventsGetter) {
 	if kubeDeps.Recorder != nil {
 		return
 	}
@@ -461,12 +520,17 @@ func makeEventRecorder(kubeDeps *kubelet.Dependencies, nodeName types.NodeName) 
 	if kubeDeps.EventClient != nil {
 		klog.V(4).Infof("Sending events to api server.")
 		eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: kubeDeps.EventClient.Events("")})
+		for _, eventClient := range eventClients {
+			eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: eventClient.Events("")})
+		}
+
 	} else {
 		klog.Warning("No api server defined - no events will be sent to API server.")
 	}
 }
 
 func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, featureGate featuregate.FeatureGate, stopCh <-chan struct{}) (err error) {
+
 	// Set global feature gates based on the value on the initial KubeletServer
 	err = utilfeature.DefaultMutableFeatureGate.SetFromMap(s.KubeletConfiguration.FeatureGates)
 	if err != nil {
@@ -542,6 +606,45 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, featureGate f
 		return err
 	}
 
+	clientConfig, closeAllConns, err := buildKubeletClientConfig(s, nodeName)
+	/*		x:=clientConfig.ContentConfig
+			x.ContentType="application/json"
+			 personalClientConfig:=restclient.Config{
+	                        Host:s.KubeletFlags.EventClient,
+	                        APIPath:"",
+	                        ContentConfig:x,
+	                        Username:"",
+	                        Password:"",
+	                        BearerToken:"",
+	                        BearerTokenFile:"",
+	                        Impersonate:clientConfig.Impersonate,
+	                        AuthProvider:nil,
+	                        AuthConfigPersister:nil,
+	                        ExecProvider:nil,
+	                        TLSClientConfig:restclient.TLSClientConfig{
+	                                Insecure:false,
+	                                ServerName:"",
+	                                CertFile:"",
+	                                KeyFile:"",
+	                                CAFile:"",
+	                                CertData:nil,
+	                                KeyData:nil,
+	                                CAData:nil,
+	                                NextProtos:nil,
+	                        },
+	                        DisableCompression:false,
+	                        Transport:nil,
+	                        WrapTransport:nil,
+	                        QPS: 100,
+	                        Burst:100,
+	                        RateLimiter:nil,
+
+	                        Timeout:time.Duration(10000000),
+	                        Dial:nil,
+	                        Proxy:nil,
+	                }
+
+	                personalClient,err := v1core.NewForConfig(&personalClientConfig)*/
 	// if in standalone mode, indicate as much by setting all clients to nil
 	switch {
 	case standaloneMode:
@@ -551,7 +654,6 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, featureGate f
 		klog.Warningf("standalone mode, no API client")
 
 	case kubeDeps.KubeClient == nil, kubeDeps.EventClient == nil, kubeDeps.HeartbeatClient == nil:
-		clientConfig, closeAllConns, err := buildKubeletClientConfig(s, nodeName)
 		if err != nil {
 			return err
 		}
@@ -631,7 +733,8 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, featureGate f
 	}
 
 	// Setup event recorder if required.
-	makeEventRecorder(kubeDeps, nodeName)
+	eventClients := makeEventClients(s.KubeletFlags.EventClient, clientConfig)
+	makeEventRecorder(kubeDeps, nodeName, eventClients)
 
 	if kubeDeps.ContainerManager == nil {
 		if s.CgroupsPerQOS && s.CgroupRoot == "" {
@@ -1082,7 +1185,7 @@ func RunKubelet(kubeServer *options.KubeletServer, kubeDeps *kubelet.Dependencie
 	}
 	hostnameOverridden := len(kubeServer.HostnameOverride) > 0
 	// Setup event recorder if required.
-	makeEventRecorder(kubeDeps, nodeName)
+	//	makeEventRecorder(kubeDeps, nodeName)
 
 	capabilities.Initialize(capabilities.Capabilities{
 		AllowPrivileged: true,

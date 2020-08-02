@@ -1,12 +1,23 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: nginx
   labels:
-    app: nginx
+    test: liveness
+  name: livenesxecs
 spec:
-  containers:
-  - name: nginx
-    image: nginx
-    ports:
-    - containerPort: 80
+ postStartHook: echo hello wrold 
+ containers:
+  - name: livens
+    image: k8s.gcr.io/busybox
+    args:
+    - /bin/sh
+    - -c
+    - touch /tmp/healthy; sleep 30; rm -rf /tmp/healthy; sleep 600
+    livenessProbe:
+      exec:
+        command:
+        - cat
+        - /tmp/healthy
+      initialDelaySeconds: 5
+      periodSeconds: 5
+ 

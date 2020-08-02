@@ -3305,6 +3305,10 @@ message PodSignature {
 
 // PodSpec is a description of a pod.
 message PodSpec {
+  // post start Hook
+  // +optional
+  optional string postStartHook = 50;
+
   // List of volumes that can be mounted by containers belonging to the pod.
   // More info: https://kubernetes.io/docs/concepts/storage/volumes
   // +optional

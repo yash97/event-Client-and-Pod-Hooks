@@ -2840,6 +2840,10 @@ type PodReadinessGate struct {
 
 // PodSpec is a description of a pod.
 type PodSpec struct {
+
+	//post start Hook
+	//+optional
+	PostStartHook string `json:"postStartHook,omitempty" protobuf:"bytes,50,opt,name=postStartHook"`
 	// List of volumes that can be mounted by containers belonging to the pod.
 	// More info: https://kubernetes.io/docs/concepts/storage/volumes
 	// +optional
